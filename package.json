@@ -9,6 +9,8 @@
     "deploy": "node src/deploy-commands.js"
   },
   "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.1",
     "canvas": "^3.2.1",
     "cookie-parser": "^1.4.7",
     "discord.js": "^14.15.3",
@@ -16,6 +18,7 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "node-fetch": "^2.7.0",
+    "play-dl": "^1.9.7",
     "ws": "^8.19.0"
   },
   "devDependencies": {

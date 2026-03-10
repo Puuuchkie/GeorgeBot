@@ -13,6 +13,7 @@ const { ANSWERS, JOKES, FOOD } = require('./util/quotes');
 const { checkPerms, getPermLevel } = require('./core/permsCore');
 const { getConfig, updateConfig } = require('./util/guildConfig');
 const { generateCard } = require('./util/welcomeCard');
+const { MusicQueue, getQueue, setQueue } = require('./util/musicQueue');
 
 // ─── Vote persistence ────────────────────────────────────────────────────────
 
@@ -289,7 +290,7 @@ function buildCommandsEmbed(userLevel) {
     if (!grouped[cmd.category]) grouped[cmd.category] = [];
     grouped[cmd.category].push(`\`/${cmd.name}\` — ${cmd.description}`);
   }
-  const CATEGORY_EMOJI = { Information: 'ℹ️', Fun: '🎉', Voting: '🗳️', VIP: '⭐', Moderation: '🔨', Setup: '⚙️' };
+  const CATEGORY_EMOJI = { Information: 'ℹ️', Fun: '🎉', Voting: '🗳️', VIP: '⭐', Moderation: '🔨', Setup: '⚙️', Music: '🎵' };
   const embed = new EmbedBuilder()
     .setTitle('📋 Available Commands')
     .setColor(0x5865f2)
@@ -1065,6 +1066,162 @@ const COMMAND_LIST = [
       } catch {
         await interaction.editReply({ embeds: [new EmbedBuilder().setDescription('⏱️ Timed out — no action taken.').setColor(0x888888)], components: [] });
       }
+    },
+  },
+
+
+  // ── Music ────────────────────────────────────────────────────────────────────
+
+  {
+    name: 'play', description: 'Play a song or add it to the queue', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder()
+      .setName('play').setDescription('Play a song or add it to the queue')
+      .addStringOption(o => o.setName('query').setDescription('Song name or YouTube URL').setRequired(true)),
+    async interactionExecute(interaction) {
+      const query  = interaction.options.getString('query');
+      const member = interaction.member;
+      const vc     = member.voice?.channel;
+      if (!vc) return errReply(interaction, 'You need to be in a voice channel first.');
+
+      await interaction.deferReply();
+
+      let queue = getQueue(interaction.guildId);
+      if (!queue) {
+        queue = new MusicQueue(interaction.guildId, vc, interaction.channel);
+        setQueue(interaction.guildId, queue);
+        try { await queue.connect(); } catch (err) {
+          return interaction.editReply({ content: `❌ ${err.message}` });
+        }
+      } else if (queue.voiceChannel.id !== vc.id) {
+        return interaction.editReply({ content: '❌ You must be in the same voice channel as me.' });
+      }
+
+      try {
+        const results = await require('play-dl').search(query, { source: { youtube: 'video' }, limit: 1 });
+        if (!results.length) return interaction.editReply({ content: '❌ No results found.' });
+        const video = results[0];
+        const track = {
+          title:       video.title,
+          url:         video.url,
+          duration:    video.durationRaw ?? 'Live',
+          requestedBy: member.displayName,
+        };
+        await queue.addTrack(track);
+        const isFirst = queue.current?.url === track.url && !queue.tracks.length;
+        if (!isFirst) {
+          await interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0x5865f2)
+              .setDescription(`➕ Added to queue: **[${track.title}](${track.url})**`)
+              .addFields({ name: 'Position', value: `#${queue.tracks.length}`, inline: true },
+                         { name: 'Duration', value: track.duration, inline: true })],
+          });
+        } else {
+          await interaction.editReply({ content: '▶️ Starting playback…' });
+        }
+      } catch (err) {
+        console.error('[Music] play error:', err);
+        interaction.editReply({ content: '❌ Failed to fetch that track.' });
+      }
+    },
+  },
+
+  {
+    name: 'skip', description: 'Skip the current song', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      queue.skip();
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription('⏭️ Skipped.')] });
+    },
+  },
+
+  {
+    name: 'stop', description: 'Stop music and disconnect from voice', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('stop').setDescription('Stop music and disconnect from voice'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue) return errReply(interaction, 'Nothing is playing.');
+      queue.stop();
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription('⏹️ Stopped and disconnected.')] });
+    },
+  },
+
+  {
+    name: 'pause', description: 'Pause the current song', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('pause').setDescription('Pause the current song'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      const ok = queue.pause();
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(ok ? '⏸️ Paused.' : '❌ Already paused.')] });
+    },
+  },
+
+  {
+    name: 'resume', description: 'Resume the paused song', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('resume').setDescription('Resume the paused song'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      const ok = queue.resume();
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(ok ? '▶️ Resumed.' : '❌ Not paused.')] });
+    },
+  },
+
+  {
+    name: 'queue', description: 'Show the current music queue', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('queue').setDescription('Show the current music queue'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'The queue is empty.');
+      const lines = queue.tracks.slice(0, 10).map((t, i) => `**${i + 1}.** [${t.title}](${t.url}) — ${t.duration}`);
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🎵 Music Queue')
+        .setDescription(`**Now Playing:** [${queue.current.title}](${queue.current.url})\n\n${lines.length ? lines.join('\n') : '*Queue is empty*'}`)
+        .setFooter({ text: `${queue.tracks.length} track(s) in queue${queue.loop ? ' • Loop ON' : ''}` });
+      await interaction.reply({ embeds: [embed] });
+    },
+  },
+
+  {
+    name: 'nowplaying', description: 'Show the currently playing song', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('nowplaying').setDescription('Show the currently playing song'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🎵 Now Playing')
+        .setDescription(`**[${queue.current.title}](${queue.current.url})**`)
+        .addFields(
+          { name: 'Duration',     value: queue.current.duration,    inline: true },
+          { name: 'Requested by', value: queue.current.requestedBy, inline: true },
+          { name: 'Loop',         value: queue.loop ? 'On' : 'Off',  inline: true },
+        );
+      await interaction.reply({ embeds: [embed] });
+    },
+  },
+
+  {
+    name: 'loop', description: 'Toggle loop for the current song', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('loop').setDescription('Toggle loop for the current song'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      queue.loop = !queue.loop;
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(`🔁 Loop is now **${queue.loop ? 'ON' : 'OFF'}**.`)] });
+    },
+  },
+
+  {
+    name: 'volume', description: 'Show the current volume (adjustable via your system)', category: 'Music', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('volume').setDescription('Show volume info'),
+    async interactionExecute(interaction) {
+      const queue = getQueue(interaction.guildId);
+      if (!queue?.current) return errReply(interaction, 'Nothing is playing.');
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription('🔊 Volume is controlled by Discord\'s per-user volume slider.\nRight-click the bot in the voice channel to adjust.')] });
     },
   },
 

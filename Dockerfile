@@ -9,7 +9,8 @@ RUN apk add --no-cache \
     build-base \
     g++ \
     make \
-    python3
+    python3 \
+    ffmpeg
 
 WORKDIR /app
 
