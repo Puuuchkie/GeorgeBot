@@ -12,6 +12,11 @@ const play = require('play-dl');
 const { EmbedBuilder } = require('discord.js');
 const { logAction }    = require('../webui/logger');
 
+// ── YouTube cookie support (set YOUTUBE_COOKIE env var to bypass bot detection)
+if (process.env.YOUTUBE_COOKIE) {
+  play.setToken({ youtube: { cookie: process.env.YOUTUBE_COOKIE } });
+}
+
 const queues = new Map(); // guildId -> MusicQueue
 
 class MusicQueue {
@@ -86,8 +91,35 @@ class MusicQueue {
 
     this.current = this.tracks.shift();
 
+    // Try streaming — if the first URL fails, search for an alternative
+    let stream;
     try {
-      const stream   = await play.stream(this.current.url);
+      stream = await play.stream(this.current.url);
+    } catch (err) {
+      console.error(`[Music] Stream failed for "${this.current.title}": ${err.message}`);
+
+      // Fallback: search YouTube by title and try the next best result
+      try {
+        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 3 });
+        const fallback = results.find(v => v.url !== this.current.url);
+        if (fallback) {
+          console.warn(`[Music] Falling back to: ${fallback.title} (${fallback.url})`);
+          this.current = { ...this.current, url: fallback.url, duration: fallback.durationRaw ?? '?' };
+          stream = await play.stream(fallback.url);
+        }
+      } catch (fbErr) {
+        console.error(`[Music] Fallback also failed: ${fbErr.message}`);
+      }
+
+      if (!stream) {
+        this.textChannel.send(`❌ Could not stream **${this.current.title}** — skipping.\n> Error: \`${err.message}\``).catch(() => {});
+        this.current = null;
+        this._playNext();
+        return;
+      }
+    }
+
+    try {
       const resource = createAudioResource(stream.stream, { inputType: stream.type });
       this.player.play(resource);
 
@@ -97,13 +129,13 @@ class MusicQueue {
         .setTitle('🎵 Now Playing')
         .setDescription(`**[${this.current.title}](${this.current.url})**`)
         .addFields(
-          { name: 'Duration',    value: this.current.duration, inline: true },
-          { name: 'Requested by', value: `${this.current.requestedBy}`, inline: true },
+          { name: 'Duration',     value: this.current.duration,    inline: true },
+          { name: 'Requested by', value: this.current.requestedBy, inline: true },
         );
       this.textChannel.send({ embeds: [embed] }).catch(() => {});
     } catch (err) {
-      console.error('[Music] Stream error:', err.message);
-      this.textChannel.send(`❌ Failed to play **${this.current.title}**. Skipping…`).catch(() => {});
+      console.error(`[Music] Playback error: ${err.message}`);
+      this.textChannel.send(`❌ Playback error for **${this.current.title}** — skipping.`).catch(() => {});
       this.current = null;
       this._playNext();
     }
