@@ -1451,6 +1451,34 @@ async function handleButton(interaction) {
     });
     return;
   }
+
+  // Music controls
+  if (id.startsWith('music_')) {
+    const { getQueue } = require('./util/musicQueue');
+    const queue = getQueue(interaction.guildId);
+    if (!queue?.current) {
+      return interaction.reply({ content: '❌ Nothing is playing.', ephemeral: true });
+    }
+    await interaction.deferUpdate();
+
+    if (id === 'music_pause') {
+      queue.pause();
+    } else if (id === 'music_resume') {
+      queue.resume();
+    } else if (id === 'music_skip') {
+      queue.skip();
+    } else if (id === 'music_stop') {
+      queue.stop();
+    } else if (id === 'music_loop') {
+      queue.loop = !queue.loop;
+    }
+
+    // Refresh the embed with updated state (skip/stop will trigger _playNext on their own)
+    if (id !== 'music_skip' && id !== 'music_stop') {
+      await queue._updateNowPlaying();
+    }
+    return;
+  }
 }
 
 // ─── Build command map ────────────────────────────────────────────────────────
