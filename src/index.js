@@ -1,17 +1,15 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 
-const messageCreate = require('./listeners/messageCreate');
-const ready = require('./listeners/ready');
-const voiceStateUpdate = require('./listeners/voiceStateUpdate');
+const ready             = require('./listeners/ready');
+const voiceStateUpdate  = require('./listeners/voiceStateUpdate');
+const interactionCreate = require('./listeners/interactionCreate');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.Channel],
 });
@@ -19,7 +17,7 @@ const client = new Client({
 // Register listeners
 client.once(ready.name, (c) => ready.execute(c).catch(console.error));
 
-for (const listener of [messageCreate, voiceStateUpdate]) {
+for (const listener of [voiceStateUpdate, interactionCreate]) {
   client.on(listener.name, (...args) => listener.execute(...args).catch(console.error));
 }
 

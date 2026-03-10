@@ -1,11 +1,12 @@
 {
-  "name": "supremebot",
+  "name": "georgebot",
   "version": "1.0.0",
-  "description": "A Discord bot rewritten in Node.js",
+  "description": "GeorgeBot — a Discord bot built with discord.js v14",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "deploy": "node src/deploy-commands.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
