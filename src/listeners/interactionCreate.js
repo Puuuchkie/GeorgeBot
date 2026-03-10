@@ -23,6 +23,7 @@ module.exports = {
         }
         await command.interactionExecute(interaction);
       } else if (interaction.isButton()) {
+        logAction('button', `${interaction.user.tag} pressed [${interaction.customId}] in ${interaction.guild?.name ?? 'DM'}`);
         await handleButton(interaction);
       }
     } catch (err) {

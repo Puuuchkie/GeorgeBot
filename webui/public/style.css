@@ -268,6 +268,98 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .log-cat.member-join  { background: #43b58122; color: #43b581; border: 1px solid #43b58144; }
 .log-cat.member-leave { background: #72767d22; color: #72767d; border: 1px solid #72767d44; }
 .log-cat.system       { background: #36393f;   color: #72767d; border: 1px solid #444; }
+.log-cat.bot          { background: #00b0f422; color: #00b0f4; border: 1px solid #00b0f444; }
+.log-cat.button       { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
+
+/* ── Log toolbar ─────────────────────────────── */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.log-filters { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.filter-btn {
+  padding: 4px 12px;
+  border-radius: 5px;
+  border: 1px solid #444;
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .1s, color .1s;
+}
+.filter-btn:hover  { background: var(--bg3); color: var(--text); }
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Controls ────────────────────────────────── */
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.ctrl-card {
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 22px 24px;
+}
+
+.ctrl-card h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 18px;
+}
+
+select {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s;
+  cursor: pointer;
+}
+select:focus { border-color: var(--accent); }
+select:disabled { opacity: .5; cursor: default; }
+
+/* ── Music queue cards ───────────────────────── */
+.music-queue-card {
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.music-queue-card img { width: 32px; height: 32px; border-radius: 50%; }
+.music-queue-info { flex: 1; min-width: 0; }
+.music-queue-info .mq-guild { font-weight: 600; font-size: 14px; }
+.music-queue-info .mq-track { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-queue-info .mq-meta  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.music-queue-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.mq-btn {
+  padding: 6px 14px;
+  border-radius: 5px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.mq-btn:hover { opacity: .8; }
+.mq-btn.skip { background: var(--bg3); color: var(--text); }
+.mq-btn.stop { background: var(--red); color: #fff; }
 
 /* ── Restart ─────────────────────────────────── */
 .danger-zone {

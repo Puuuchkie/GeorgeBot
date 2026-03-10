@@ -23,7 +23,10 @@ module.exports = {
     // Auto-role
     if (config.autorole) {
       const role = guild.roles.cache.get(config.autorole);
-      if (role) await member.roles.add(role).catch(() => {});
+      if (role) {
+        await member.roles.add(role).catch(() => {});
+        logAction('bot', `Autorole @${role.name} assigned to ${member.user.tag} in ${guild.name}`);
+      }
     }
 
     // Welcome channel card

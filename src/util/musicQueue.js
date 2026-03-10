@@ -343,5 +343,6 @@ class MusicQueue {
 
 function getQueue(guildId)        { return queues.get(guildId) ?? null; }
 function setQueue(guildId, queue) { queues.set(guildId, queue); }
+function getAllQueues()            { return queues; }
 
-module.exports = { MusicQueue, getQueue, setQueue };
+module.exports = { MusicQueue, getQueue, setQueue, getAllQueues };

@@ -27,6 +27,9 @@
     <a class="nav-link" data-section="guilds">
       <span class="icon">🏠</span> Guilds
     </a>
+    <a class="nav-link" data-section="controls">
+      <span class="icon">🎛️</span> Controls
+    </a>
     <a class="nav-link" data-section="logs">
       <span class="icon">📋</span> Logs
     </a>
@@ -88,7 +91,7 @@
     <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;margin-bottom:28px">
       <div>
         <h3>Recent Logs</h3>
-        <div id="log-output" style="height: 300px;"></div>
+        <div id="log-output" class="log-output" style="height:300px"></div>
       </div>
       <div>
         <h3>Top Commands</h3>
@@ -164,10 +167,90 @@
     </div>
   </div>
 
+  <!-- Controls -->
+  <div class="section" id="section-controls">
+    <h2>Controls</h2>
+
+    <div class="controls-grid">
+
+      <!-- Bot Presence -->
+      <div class="ctrl-card">
+        <h3>Bot Presence</h3>
+        <div class="field">
+          <label>Status</label>
+          <select id="ctrl-status">
+            <option value="online">🟢 Online</option>
+            <option value="idle">🟡 Idle</option>
+            <option value="dnd">🔴 Do Not Disturb</option>
+            <option value="invisible">⚫ Invisible</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Activity Type</label>
+          <select id="ctrl-activity-type">
+            <option value="Playing">Playing</option>
+            <option value="Listening">Listening to</option>
+            <option value="Watching">Watching</option>
+            <option value="Competing">Competing in</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Activity Text</label>
+          <input type="text" id="ctrl-activity-text" placeholder="with your feelings">
+        </div>
+        <button class="save-btn" id="ctrl-set-presence">Set Presence</button>
+      </div>
+
+      <!-- Announce -->
+      <div class="ctrl-card">
+        <h3>Send Announcement</h3>
+        <div class="field">
+          <label>Guild</label>
+          <select id="ctrl-ann-guild">
+            <option value="">— Select a guild —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Channel</label>
+          <select id="ctrl-ann-channel" disabled>
+            <option value="">— Select a guild first —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Message</label>
+          <textarea id="ctrl-ann-msg" placeholder="Type your announcement…" style="min-height:100px"></textarea>
+        </div>
+        <button class="save-btn" id="ctrl-send-ann">Send</button>
+      </div>
+
+    </div>
+
+    <!-- Music Queues -->
+    <div style="margin-top:28px">
+      <h3>Active Music Queues</h3>
+      <div id="ctrl-music-queues">
+        <p style="color:var(--muted);font-size:14px;margin-top:8px">No music playing.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Logs -->
   <div class="section" id="section-logs">
     <h2>Live Logs</h2>
-    <div id="log-output-full" class="log-output" style="height:calc(100vh - 160px);background:#111;border-radius:8px;padding:16px;font-family:Menlo,Consolas,monospace;font-size:12px;line-height:1.6;overflow-y:auto;color:#aaa;"></div>
+    <div class="log-toolbar">
+      <div class="log-filters" id="log-filters">
+        <button class="filter-btn active" data-cat="">All</button>
+        <button class="filter-btn" data-cat="bot">Bot</button>
+        <button class="filter-btn" data-cat="command">Commands</button>
+        <button class="filter-btn" data-cat="music">Music</button>
+        <button class="filter-btn" data-cat="voice">Voice</button>
+        <button class="filter-btn" data-cat="moderation">Moderation</button>
+        <button class="filter-btn" data-cat="member-join">Joins</button>
+        <button class="filter-btn" data-cat="member-leave">Leaves</button>
+      </div>
+      <button class="filter-btn" id="log-clear-btn">Clear</button>
+    </div>
+    <div id="log-output-full" class="log-output" style="height:calc(100vh - 200px)"></div>
   </div>
 
   <!-- Restart -->
