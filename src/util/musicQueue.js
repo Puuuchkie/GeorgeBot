@@ -15,13 +15,9 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { spawn }  = require('child_process');
-const play       = require('play-dl');
+const { spawn }     = require('child_process');
+const play          = require('play-dl');
 const { logAction } = require('../webui/logger');
-
-// ── yt-dlp cookie file (optional) ────────────────────────────────────────────
-// Set YOUTUBE_COOKIE_FILE=/path/to/cookies.txt (Netscape format) in your env
-// to bypass YouTube bot detection for age-restricted or region-locked videos.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseDuration(str) {
@@ -46,12 +42,11 @@ function buildProgressBar(elapsed, total, width = 18) {
   if (!total) return '─'.repeat(width);
   const ratio  = Math.min(elapsed / total, 1);
   const filled = Math.round(ratio * width);
-  const bar    = '█'.repeat(filled) + '░'.repeat(width - filled);
-  return `\`${bar}\` ${formatTime(elapsed)} / ${formatTime(total)}`;
+  return `\`${'█'.repeat(filled)}${'░'.repeat(width - filled)}\` ${formatTime(elapsed)} / ${formatTime(total)}`;
 }
 
-function buildControls(isPaused, loopOn) {
-  return new ActionRowBuilder().addComponents(
+function buildComponents(isPaused, loopOn, volume) {
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(isPaused ? 'music_resume' : 'music_pause')
       .setLabel(isPaused ? '▶ Resume' : '⏸ Pause')
@@ -69,6 +64,21 @@ function buildControls(isPaused, loopOn) {
       .setLabel(loopOn ? '🔁 Loop: On' : '🔁 Loop: Off')
       .setStyle(loopOn ? ButtonStyle.Success : ButtonStyle.Secondary),
   );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_vol_dn')
+      .setLabel('🔉 Vol −')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(volume <= 0),
+    new ButtonBuilder()
+      .setCustomId('music_vol_up')
+      .setLabel('🔊 Vol +')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(volume >= 200),
+  );
+
+  return [row1, row2];
 }
 
 const queues = new Map();
@@ -81,11 +91,13 @@ class MusicQueue {
     this.tracks         = [];
     this.current        = null;
     this.loop           = false;
+    this.volume         = 100; // percent (0–200)
     this.isPaused       = false;
     this.connection     = null;
     this.leaveTimer     = null;
     this.nowPlayingMsg  = null;
     this._progressTimer = null;
+    this._resource      = null;
     this.startedAt      = null;
     this.pausedAt       = null;
     this.pausedOffset   = 0;
@@ -143,24 +155,56 @@ class MusicQueue {
     }
   }
 
-  // ── Streaming via yt-dlp ─────────────────────────────────────────────────────
+  // ── Streaming: yt-dlp → ffmpeg → PCM (most stable for Discord) ──────────────
   _stream(url) {
-    const args = [
-      '--format', 'bestaudio[ext=webm][acodec=opus]/bestaudio/best',
+    // yt-dlp downloads best audio and pipes to stdout
+    const ytdlpArgs = [
+      '--format', 'bestaudio',
       '--no-playlist',
       '--quiet',
-      '-o', '-', // pipe audio to stdout
+      '-o', '-',
     ];
     if (process.env.YOUTUBE_COOKIE_FILE) {
-      args.push('--cookies', process.env.YOUTUBE_COOKIE_FILE);
+      ytdlpArgs.push('--cookies', process.env.YOUTUBE_COOKIE_FILE);
     }
-    args.push(url);
+    ytdlpArgs.push(url);
 
-    const proc = spawn('yt-dlp', args);
-    proc.stderr.on('data', d => console.error('[yt-dlp]', d.toString().trim()));
-    proc.on('error', err => console.error('[yt-dlp] spawn error:', err.message));
+    // ffmpeg transcodes to raw PCM (s16le, 48kHz, stereo) — the most stable
+    // format for @discordjs/voice, with no internal re-transcoding.
+    const ffmpegArgs = [
+      '-loglevel', 'error',
+      '-i', 'pipe:0',
+      '-ac', '2',
+      '-ar', '48000',
+      '-f', 's16le',
+      'pipe:1',
+    ];
 
-    return createAudioResource(proc.stdout, { inputType: StreamType.Arbitrary, inlineVolume: true });
+    const ytdlp  = spawn('yt-dlp',  ytdlpArgs);
+    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+    ytdlp.stdout.pipe(ffmpeg.stdin);
+    ytdlp.stderr.on('data', d => console.error('[yt-dlp]', d.toString().trim()));
+    ytdlp.on('error', err => console.error('[yt-dlp] error:', err.message));
+    ytdlp.on('close', code => {
+      if (code !== 0) console.warn(`[yt-dlp] exited with code ${code}`);
+      ffmpeg.stdin.end();
+    });
+    ffmpeg.stderr.on('data', d => console.error('[ffmpeg]', d.toString().trim()));
+    ffmpeg.on('error', err => console.error('[ffmpeg] error:', err.message));
+
+    this._resource = createAudioResource(ffmpeg.stdout, {
+      inputType:    StreamType.Raw,
+      inlineVolume: true,
+    });
+    this._resource.volume?.setVolume(this.volume / 100);
+    return this._resource;
+  }
+
+  // ── Volume ──────────────────────────────────────────────────────────────────
+  setVolume(percent) {
+    this.volume = Math.max(0, Math.min(200, percent));
+    this._resource?.volume?.setVolume(this.volume / 100);
   }
 
   // ── Resolve URL when missing ─────────────────────────────────────────────────
@@ -172,12 +216,12 @@ class MusicQueue {
     return results[0].url;
   }
 
-  // ── Now Playing embed + controls ────────────────────────────────────────────
+  // ── Now Playing embed ────────────────────────────────────────────────────────
   _buildNowPlayingEmbed() {
-    const total   = parseDuration(this.current.duration);
+    const total      = parseDuration(this.current.duration);
     const rawElapsed = this.isPaused
-      ? (this.pausedAt - this.startedAt) / 1000 + this.pausedOffset
-      : (Date.now()   - this.startedAt) / 1000 + this.pausedOffset;
+      ? (this.pausedAt  - this.startedAt) / 1000 + this.pausedOffset
+      : (Date.now()     - this.startedAt) / 1000 + this.pausedOffset;
     const elapsed = Math.max(0, rawElapsed);
 
     return new EmbedBuilder()
@@ -185,8 +229,9 @@ class MusicQueue {
       .setTitle('🎵 Now Playing')
       .setDescription(`**[${this.current.title}](${this.current.url})**\n\n${buildProgressBar(elapsed, total)}`)
       .addFields(
-        { name: 'Duration',     value: this.current.duration,    inline: true },
-        { name: 'Requested by', value: this.current.requestedBy, inline: true },
+        { name: 'Duration',     value: this.current.duration,                    inline: true },
+        { name: 'Requested by', value: this.current.requestedBy,                 inline: true },
+        { name: 'Volume',       value: `${this.volume}%`,                        inline: true },
         { name: 'Queue',        value: `${this.tracks.length} track(s) remaining`, inline: true },
       )
       .setFooter({ text: this.loop ? '🔁 Loop enabled' : '─' });
@@ -197,7 +242,7 @@ class MusicQueue {
     try {
       await this.nowPlayingMsg.edit({
         embeds:     [this._buildNowPlayingEmbed()],
-        components: [buildControls(this.isPaused, this.loop)],
+        components: buildComponents(this.isPaused, this.loop, this.volume),
       });
     } catch { /* message may have been deleted */ }
   }
@@ -216,10 +261,11 @@ class MusicQueue {
     this._progressTimer = null;
   }
 
-  // ── Playback ────────────────────────────────────────────────────────────────
+  // ── Playback ─────────────────────────────────────────────────────────────────
   async _playNext() {
     clearTimeout(this.leaveTimer);
     this.nowPlayingMsg = null;
+    this._resource     = null;
 
     if (!this.tracks.length) {
       this.current = null;
@@ -227,10 +273,10 @@ class MusicQueue {
       return;
     }
 
-    this.current = this.tracks.shift();
-    this.isPaused    = false;
-    this.startedAt   = null;
-    this.pausedAt    = null;
+    this.current      = this.tracks.shift();
+    this.isPaused     = false;
+    this.startedAt    = null;
+    this.pausedAt     = null;
     this.pausedOffset = 0;
 
     try {
@@ -239,14 +285,13 @@ class MusicQueue {
 
       const resource = this._stream(url);
       this.player.play(resource);
-
       this.startedAt = Date.now();
+
       logAction('music', `Now playing: ${this.current.title} [${this.current.duration}] — requested by ${this.current.requestedBy}`);
 
-      // Send Now Playing embed with controls
       this.nowPlayingMsg = await this.textChannel.send({
         embeds:     [this._buildNowPlayingEmbed()],
-        components: [buildControls(false, this.loop)],
+        components: buildComponents(false, this.loop, this.volume),
       }).catch(() => null);
 
       this._startProgressUpdater();
@@ -266,17 +311,14 @@ class MusicQueue {
 
   pause() {
     const ok = this.player.pause();
-    if (ok) {
-      this.isPaused = true;
-      this.pausedAt = Date.now();
-    }
+    if (ok) { this.isPaused = true; this.pausedAt = Date.now(); }
     return ok;
   }
 
   resume() {
     const ok = this.player.unpause();
     if (ok) {
-      this.isPaused    = false;
+      this.isPaused     = false;
       this.pausedOffset += (Date.now() - (this.pausedAt ?? Date.now())) / 1000;
       this.pausedAt     = null;
     }

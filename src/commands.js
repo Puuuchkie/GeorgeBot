@@ -1468,9 +1468,13 @@ async function handleButton(interaction) {
       queue.stop();
     } else if (id === 'music_loop') {
       queue.loop = !queue.loop;
+    } else if (id === 'music_vol_dn') {
+      queue.setVolume(queue.volume - 10);
+    } else if (id === 'music_vol_up') {
+      queue.setVolume(queue.volume + 10);
     }
 
-    // Refresh the embed with updated state (skip/stop will trigger _playNext on their own)
+    // Refresh the embed (skip/stop trigger _playNext themselves)
     if (id !== 'music_skip' && id !== 'music_stop') {
       await queue._updateNowPlaying();
     }
