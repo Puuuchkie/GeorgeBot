@@ -111,7 +111,10 @@
         <button class="tab-btn active" data-tab="welcome">Welcome</button>
         <button class="tab-btn" data-tab="goodbye">Goodbye</button>
         <button class="tab-btn" data-tab="autorole">Auto-role</button>
+        <button class="tab-btn" data-tab="automod">AutoMod</button>
+        <button class="tab-btn" data-tab="xp">Ranking</button>
         <button class="tab-btn" data-tab="warnings">Warnings</button>
+        <button class="tab-btn" data-tab="leaderboard">Leaderboard</button>
       </div>
 
       <!-- Welcome tab -->
@@ -160,9 +163,57 @@
         <button class="save-btn" id="save-autorole">Save</button>
       </div>
 
+      <!-- AutoMod tab -->
+      <div class="tab-pane" id="tab-automod">
+        <div class="field toggle-row">
+          <label>Enable AutoMod</label>
+          <input type="checkbox" id="am-enabled" checked>
+        </div>
+        <div class="field toggle-row">
+          <label>Anti-Spam (5 msgs / 3s)</label>
+          <input type="checkbox" id="am-antispam" checked>
+        </div>
+        <div class="field toggle-row">
+          <label>Block Discord Invite Links</label>
+          <input type="checkbox" id="am-invites">
+        </div>
+        <div class="field">
+          <label>Max Mentions Per Message</label>
+          <input type="text" id="am-mentions" placeholder="5" style="width:80px">
+        </div>
+        <div class="field">
+          <label>Banned Words <span style="color:#555;font-style:italic">(one per line, case-insensitive)</span></label>
+          <textarea id="am-words" placeholder="badword&#10;anotherbadword" style="min-height:120px;font-family:monospace"></textarea>
+        </div>
+        <button class="save-btn" id="save-automod">Save AutoMod</button>
+      </div>
+
+      <!-- XP / Ranking tab -->
+      <div class="tab-pane" id="tab-xp">
+        <div class="field toggle-row">
+          <label>Enable XP Ranking System</label>
+          <input type="checkbox" id="xp-enabled" checked>
+        </div>
+        <div class="field">
+          <label>Level-Up Announcement Channel ID <span style="color:#555;font-style:italic">(blank = same channel)</span></label>
+          <input type="text" id="xp-channel" placeholder="Leave blank for same channel">
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+          Members earn 15–25 XP per message with a 60s cooldown.<br>
+          Use <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">/rank</code> and
+          <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">/leaderboard</code> in Discord.
+        </p>
+        <button class="save-btn" id="save-xp">Save Ranking</button>
+      </div>
+
       <!-- Warnings tab -->
       <div class="tab-pane" id="tab-warnings">
         <div id="warnings-content"></div>
+      </div>
+
+      <!-- Leaderboard tab -->
+      <div class="tab-pane" id="tab-leaderboard">
+        <div id="leaderboard-content"><p style="color:var(--muted)">Select a guild first.</p></div>
       </div>
     </div>
   </div>

@@ -168,7 +168,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
-  if (name === 'warnings' && state.selectedGuild) loadWarnings(state.selectedGuild.id);
+  if (name === 'warnings'    && state.selectedGuild) loadWarnings(state.selectedGuild.id);
+  if (name === 'leaderboard' && state.selectedGuild) loadLeaderboard(state.selectedGuild.id);
+  if (name === 'automod'     && state.selectedGuild) loadAutomodConfig(state.selectedGuild.id);
+  if (name === 'xp'          && state.selectedGuild) loadXpConfig(state.selectedGuild.id);
 }
 
 document.getElementById('save-welcome').addEventListener('click', async () => {
@@ -353,6 +356,91 @@ async function mqAction(guildId, action) {
     toast(action === 'skip' ? 'Skipped!' : 'Stopped!');
     setTimeout(refreshMusicQueues, 1000);
   } catch { toast('Action failed', true); }
+}
+
+// ── AutoMod config ───────────────────────────────────────────────────────────
+async function loadAutomodConfig(guildId) {
+  try {
+    const res = await api(`/api/guilds/${guildId}/config`);
+    const cfg = await res.json();
+    const am  = cfg.automod ?? {};
+    document.getElementById('am-enabled').checked  = am.enabled  !== false;
+    document.getElementById('am-antispam').checked = am.antiSpam !== false;
+    document.getElementById('am-invites').checked  = !!am.blockInvites;
+    document.getElementById('am-mentions').value   = am.mentionLimit ?? 5;
+    document.getElementById('am-words').value      = (am.bannedWords ?? []).join('\n');
+  } catch { toast('Failed to load AutoMod config', true); }
+}
+
+document.getElementById('save-automod').addEventListener('click', async () => {
+  if (!state.selectedGuild) return;
+  const words = document.getElementById('am-words').value
+    .split('\n').map(w => w.trim()).filter(Boolean);
+  await saveConfig({
+    automod: {
+      enabled:      document.getElementById('am-enabled').checked,
+      antiSpam:     document.getElementById('am-antispam').checked,
+      blockInvites: document.getElementById('am-invites').checked,
+      mentionLimit: parseInt(document.getElementById('am-mentions').value) || 5,
+      bannedWords:  words,
+    },
+  });
+});
+
+// ── XP / Ranking config ──────────────────────────────────────────────────────
+async function loadXpConfig(guildId) {
+  try {
+    const res = await api(`/api/guilds/${guildId}/config`);
+    const cfg = await res.json();
+    const xp  = cfg.xp ?? {};
+    document.getElementById('xp-enabled').checked = xp.enabled !== false;
+    document.getElementById('xp-channel').value   = xp.channelId || '';
+  } catch { toast('Failed to load XP config', true); }
+}
+
+document.getElementById('save-xp').addEventListener('click', async () => {
+  if (!state.selectedGuild) return;
+  await saveConfig({
+    xp: {
+      enabled:   document.getElementById('xp-enabled').checked,
+      channelId: document.getElementById('xp-channel').value.trim() || null,
+    },
+  });
+});
+
+// ── Leaderboard ──────────────────────────────────────────────────────────────
+async function loadLeaderboard(guildId) {
+  const container = document.getElementById('leaderboard-content');
+  container.innerHTML = '<p style="color:var(--muted)">Loading…</p>';
+  try {
+    const res     = await api(`/api/guilds/${guildId}/leaderboard`);
+    const entries = await res.json();
+
+    if (!entries.length) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:14px">No XP data yet.</p>';
+      return;
+    }
+
+    const medals = ['🥇','🥈','🥉'];
+    container.innerHTML = `
+      <table class="warn-table">
+        <thead><tr><th>Rank</th><th>Member</th><th>Level</th><th>XP</th></tr></thead>
+        <tbody>
+          ${entries.map((e, i) => `
+            <tr>
+              <td>${medals[i] ?? `#${e.rank}`}</td>
+              <td style="display:flex;align-items:center;gap:8px">
+                <img src="${e.avatar || '/icon.png'}" onerror="this.src='/icon.png'" style="width:24px;height:24px;border-radius:50%">
+                ${escHtml(e.name)}
+              </td>
+              <td><strong>${e.level}</strong></td>
+              <td style="color:var(--muted)">${e.xp.toLocaleString()}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch {
+    container.innerHTML = '<p style="color:var(--red)">Failed to load leaderboard.</p>';
+  }
 }
 
 // ── Live logs ────────────────────────────────────────────────────────────────

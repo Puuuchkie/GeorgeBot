@@ -271,6 +271,9 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .log-cat.bot          { background: #00b0f422; color: #00b0f4; border: 1px solid #00b0f444; }
 .log-cat.button       { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
 
+/* leaderboard avatar cell */
+.warn-table td > img { vertical-align: middle; }
+
 /* ── Log toolbar ─────────────────────────────── */
 .log-toolbar {
   display: flex;

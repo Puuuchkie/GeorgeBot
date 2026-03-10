@@ -5,9 +5,10 @@ const fs      = require('fs');
 const path    = require('path');
 const { getConfig, updateConfig }   = require('../../util/guildConfig');
 const { getQueue, getAllQueues }     = require('../../util/musicQueue');
+const { getLeaderboard }            = require('../../util/xpManager');
 const { stats, logAction }          = require('../logger');
 
-const ALLOWED_CONFIG_KEYS = ['welcome', 'goodbye', 'autorole'];
+const ALLOWED_CONFIG_KEYS = ['welcome', 'goodbye', 'autorole', 'automod', 'xp'];
 const WARN_DIR = path.join(process.cwd(), 'data', 'warnings');
 
 let restartScheduled = false;
@@ -88,6 +89,21 @@ module.exports = function apiRouter(client) {
     if (!fs.existsSync(file)) return res.json({});
     try { res.json(JSON.parse(fs.readFileSync(file, 'utf8'))); }
     catch { res.json({}); }
+  });
+
+  // ── Leaderboard ─────────────────────────────────────────────────────────────
+  router.get('/guilds/:id/leaderboard', async (req, res) => {
+    const entries = getLeaderboard(req.params.id, 20);
+    const guild   = client.guilds.cache.get(req.params.id);
+    const result  = await Promise.all(entries.map(async e => {
+      let name = e.userId, avatar = null;
+      try {
+        const m = guild ? await guild.members.fetch(e.userId).catch(() => null) : null;
+        if (m) { name = m.displayName; avatar = m.user.displayAvatarURL({ extension: 'png', size: 32 }); }
+      } catch {}
+      return { ...e, name, avatar };
+    }));
+    res.json(result);
   });
 
   // ── Bot presence ────────────────────────────────────────────────────────────

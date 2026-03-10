@@ -1110,6 +1110,129 @@ const COMMAND_LIST = [
   },
 
 
+  // ── Ranking ──────────────────────────────────────────────────────────────────
+
+  {
+    name: 'rank', description: 'Show your XP rank in this server', category: 'Ranking', permLevel: 0,
+    slashData: new SlashCommandBuilder()
+      .setName('rank').setDescription('Show your XP rank in this server')
+      .addUserOption(o => o.setName('user').setDescription('User to check rank for')),
+    async interactionExecute(interaction) {
+      await interaction.deferReply();
+      const { createCanvas, loadImage } = require('canvas');
+      const { getRank }  = require('./util/xpManager');
+      const target = interaction.options.getMember('user') ?? interaction.member;
+      const info   = getRank(interaction.guildId, target.id);
+
+      // ── Rank card ─────────────────────────────────────────────────────────
+      const W = 700, H = 180;
+      const canvas = createCanvas(W, H);
+      const ctx    = canvas.getContext('2d');
+
+      // Background
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#1e2124');
+      bg.addColorStop(1, '#2c2f33');
+      ctx.fillStyle = bg;
+      ctx.roundRect(0, 0, W, H, 14);
+      ctx.fill();
+
+      // Avatar
+      const AX = 90, AY = 90, AR = 56;
+      try {
+        const url = target.user.displayAvatarURL({ extension: 'png', size: 128 });
+        const res = await fetch(url);
+        const buf = await res.buffer();
+        const img = await loadImage(buf);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(AX, AY, AR, 0, Math.PI * 2); ctx.clip();
+        ctx.drawImage(img, AX - AR, AY - AR, AR * 2, AR * 2);
+        ctx.restore();
+      } catch {}
+      // Avatar ring
+      ctx.beginPath(); ctx.arc(AX, AY, AR + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5865f2'; ctx.lineWidth = 4; ctx.stroke();
+
+      // Username
+      const TX = 168;
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      const name = target.displayName.length > 22 ? target.displayName.slice(0, 20) + '…' : target.displayName;
+      ctx.fillText(name, TX, 50);
+
+      // Rank + Level
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#72767d';
+      ctx.fillText(`RANK #${info.rank}`, TX, 75);
+      ctx.fillStyle = '#5865f2';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText(`Level ${info.level}`, W - 160, 55);
+
+      // XP text
+      ctx.font = '13px sans-serif';
+      ctx.fillStyle = '#72767d';
+      ctx.fillText(`${info.xp.toLocaleString()} XP total`, TX, 95);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${info.progress.toLocaleString()} / ${info.needed.toLocaleString()} XP`, W - 20, 105);
+      ctx.textAlign = 'left';
+
+      // XP bar
+      const BAR_X = TX, BAR_Y = 112, BAR_W = W - TX - 20, BAR_H = 16;
+      const ratio = Math.min(info.progress / info.needed, 1);
+      ctx.fillStyle = '#40444b';
+      ctx.roundRect(BAR_X, BAR_Y, BAR_W, BAR_H, 8); ctx.fill();
+      if (ratio > 0) {
+        const grad = ctx.createLinearGradient(BAR_X, 0, BAR_X + BAR_W, 0);
+        grad.addColorStop(0, '#5865f2'); grad.addColorStop(1, '#7983f5');
+        ctx.fillStyle = grad;
+        ctx.roundRect(BAR_X, BAR_Y, Math.max(BAR_W * ratio, 16), BAR_H, 8); ctx.fill();
+      }
+
+      // XP to next level
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = '#72767d';
+      ctx.fillText(`${(info.needed - info.progress).toLocaleString()} XP to Level ${info.level + 1}`, TX, 148);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${info.total} ranked`, W - 20, 148);
+
+      const { AttachmentBuilder } = require('discord.js');
+      await interaction.editReply({
+        files: [new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'rank.png' })],
+      });
+    },
+  },
+
+  {
+    name: 'leaderboard', description: 'Top 10 XP leaderboard for this server', category: 'Ranking', permLevel: 0,
+    slashData: new SlashCommandBuilder().setName('leaderboard').setDescription('Top 10 XP leaderboard for this server'),
+    async interactionExecute(interaction) {
+      await interaction.deferReply();
+      const { getLeaderboard } = require('./util/xpManager');
+      const entries = getLeaderboard(interaction.guildId, 10);
+
+      if (!entries.length) return interaction.editReply({ content: 'No XP data yet — start chatting!' });
+
+      const medals = ['🥇','🥈','🥉'];
+      const lines  = await Promise.all(entries.map(async (e, i) => {
+        let name = `<@${e.userId}>`;
+        try {
+          const m = await interaction.guild.members.fetch(e.userId).catch(() => null);
+          if (m) name = m.displayName;
+        } catch {}
+        const prefix = medals[i] ?? `**${e.rank}.**`;
+        return `${prefix} ${name} — Level ${e.level} · ${e.xp.toLocaleString()} XP`;
+      }));
+
+      await interaction.editReply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle(`🏆 ${interaction.guild.name} Leaderboard`)
+          .setDescription(lines.join('\n'))
+          .setFooter({ text: `Top ${entries.length} members by XP` })],
+      });
+    },
+  },
+
   // ── Music ────────────────────────────────────────────────────────────────────
 
   {
