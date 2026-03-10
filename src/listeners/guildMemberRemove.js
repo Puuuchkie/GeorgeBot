@@ -3,6 +3,7 @@
 const { AttachmentBuilder } = require('discord.js');
 const { getConfig }         = require('../util/guildConfig');
 const { generateCard }      = require('../util/welcomeCard');
+const { logAction }         = require('../webui/logger');
 
 function resolve(text, member, guild) {
   return text
@@ -16,6 +17,7 @@ module.exports = {
   name: 'guildMemberRemove',
   async execute(member) {
     const { guild } = member;
+    logAction('member-leave', `${member.user.tag} left ${guild.name}`);
     const config    = getConfig(guild.id);
     const gc        = config.goodbye;
     if (!gc?.channelId) return;

@@ -10,6 +10,7 @@ const {
 } = require('@discordjs/voice');
 const play = require('play-dl');
 const { EmbedBuilder } = require('discord.js');
+const { logAction }    = require('../webui/logger');
 
 const queues = new Map(); // guildId -> MusicQueue
 
@@ -90,6 +91,7 @@ class MusicQueue {
       const resource = createAudioResource(stream.stream, { inputType: stream.type });
       this.player.play(resource);
 
+      logAction('music', `Now playing: ${this.current.title} [${this.current.duration}] — requested by ${this.current.requestedBy}`);
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('🎵 Now Playing')

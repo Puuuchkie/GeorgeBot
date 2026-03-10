@@ -75,6 +75,37 @@ async function refreshStatus() {
   } catch {}
 }
 
+async function refreshStats() {
+  try {
+    const res  = await api('/api/stats');
+    const data = await res.json();
+    document.getElementById('card-commands').textContent    = data.totalCommands;
+    document.getElementById('card-commands-sub').textContent = `${Object.keys(data.topCommands).length} unique`;
+    document.getElementById('card-tracks').textContent      = data.tracksPlayed;
+    document.getElementById('card-joins').textContent       = data.memberJoins;
+    document.getElementById('card-modactions').textContent  = data.modActions;
+    document.getElementById('card-members-sub').textContent = `${data.totalMembers.toLocaleString()} members total`;
+
+    // Top commands list
+    const el = document.getElementById('top-commands');
+    if (!data.topCommands.length) {
+      el.innerHTML = '<p style="color:var(--muted);font-size:13px">No commands run yet this session.</p>';
+    } else {
+      const max = data.topCommands[0].count;
+      el.innerHTML = data.topCommands.map(c => `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span style="color:var(--text)">/${escHtml(c.name)}</span>
+            <span style="color:var(--muted)">${c.count}</span>
+          </div>
+          <div style="background:var(--bg3);border-radius:4px;height:4px">
+            <div style="background:var(--accent);width:${Math.round(c.count/max*100)}%;height:4px;border-radius:4px"></div>
+          </div>
+        </div>`).join('');
+    }
+  } catch {}
+}
+
 // ── Guild list ─────────────────────────────────
 async function loadGuilds() {
   const res    = await api('/api/guilds');
@@ -227,8 +258,11 @@ const LOG_MAX_NODES = 1000;
 function appendLog(entry, container) {
   const line = document.createElement('span');
   line.className = `log-line ${entry.level}`;
-  const ts = new Date(entry.ts).toLocaleTimeString();
-  line.innerHTML = `<span class="log-ts">${ts}</span>${escHtml(entry.msg)}`;
+  const ts  = new Date(entry.ts).toLocaleTimeString();
+  const cat = entry.category && entry.category !== 'system'
+    ? `<span class="log-cat ${escHtml(entry.category)}">${escHtml(entry.category)}</span>`
+    : '';
+  line.innerHTML = `<span class="log-ts">${ts}</span>${cat}${escHtml(entry.msg)}`;
   container.appendChild(line);
   container.appendChild(document.createTextNode('\n'));
 
@@ -283,9 +317,10 @@ document.getElementById('restart-btn').addEventListener('click', async () => {
 // ── Init ────────────────────────────────────────
 async function init() {
   await refreshStatus();
+  await refreshStats();
   await loadGuilds();
   connectLogs();
-  state.statusInterval = setInterval(refreshStatus, 10_000);
+  state.statusInterval = setInterval(() => { refreshStatus(); refreshStats(); }, 10_000);
 }
 
 init();

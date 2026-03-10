@@ -4,6 +4,7 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const { getConfig, updateConfig } = require('../../util/guildConfig');
+const { stats } = require('../logger');
 
 const ALLOWED_CONFIG_KEYS = ['welcome', 'goodbye', 'autorole'];
 const WARN_DIR = path.join(process.cwd(), 'data', 'warnings');
@@ -24,6 +25,26 @@ module.exports = function apiRouter(client) {
       uptime:      Math.floor(process.uptime()),
       memoryMB:    Math.round(mem.heapUsed / 1024 / 1024),
       memTotalMB:  Math.round(mem.heapTotal / 1024 / 1024),
+    });
+  });
+
+  // Extended stats
+  router.get('/stats', (req, res) => {
+    const totalMembers = client.guilds.cache.reduce((n, g) => n + g.memberCount, 0);
+    const voiceConns   = client.voice?.adapters?.size ?? 0;
+    const topCmds = Object.entries(stats.commandCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }));
+    res.json({
+      totalCommands: stats.totalCommands,
+      memberJoins:   stats.memberJoins,
+      memberLeaves:  stats.memberLeaves,
+      tracksPlayed:  stats.tracksPlayed,
+      modActions:    stats.modActions,
+      totalMembers,
+      voiceConns,
+      topCommands:   topCmds,
     });
   });
 

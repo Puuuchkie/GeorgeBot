@@ -255,10 +255,19 @@ textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 }
 
 .log-line { display: block; white-space: pre-wrap; word-break: break-all; }
-.log-line.info  { color: #ccc; }
-.log-line.warn  { color: var(--yellow); }
-.log-line.error { color: var(--red); }
-.log-ts { color: #555; margin-right: 8px; }
+.log-line.info   { color: #ccc; }
+.log-line.warn   { color: var(--yellow); }
+.log-line.error  { color: var(--red); }
+.log-line.action { color: #ddd; }
+.log-ts  { color: #555; margin-right: 6px; }
+.log-cat { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-right: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.log-cat.command      { background: #5865f222; color: #5865f2; border: 1px solid #5865f244; }
+.log-cat.voice        { background: #43b58122; color: #43b581; border: 1px solid #43b58144; }
+.log-cat.music        { background: #faa61a22; color: #faa61a; border: 1px solid #faa61a44; }
+.log-cat.moderation   { background: #f0474722; color: #f04747; border: 1px solid #f0474744; }
+.log-cat.member-join  { background: #43b58122; color: #43b581; border: 1px solid #43b58144; }
+.log-cat.member-leave { background: #72767d22; color: #72767d; border: 1px solid #72767d44; }
+.log-cat.system       { background: #36393f;   color: #72767d; border: 1px solid #444; }
 
 /* ── Restart ─────────────────────────────────── */
 .danger-zone {

@@ -54,6 +54,7 @@
       <div class="card">
         <div class="label">Guilds</div>
         <div class="value" id="card-guilds">—</div>
+        <div class="sub" id="card-members-sub"></div>
       </div>
       <div class="card">
         <div class="label">Uptime</div>
@@ -65,10 +66,35 @@
         <div class="value" id="card-memory">—</div>
         <div class="sub" id="card-memory-sub"></div>
       </div>
+      <div class="card">
+        <div class="label">Commands Run</div>
+        <div class="value" id="card-commands">—</div>
+        <div class="sub" id="card-commands-sub"></div>
+      </div>
+      <div class="card">
+        <div class="label">Tracks Played</div>
+        <div class="value" id="card-tracks">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Members Joined</div>
+        <div class="value" id="card-joins">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Mod Actions</div>
+        <div class="value" id="card-modactions">—</div>
+      </div>
     </div>
 
-    <h3>Recent Logs</h3>
-    <div id="log-output" style="height: 320px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;margin-bottom:28px">
+      <div>
+        <h3>Recent Logs</h3>
+        <div id="log-output" style="height: 300px;"></div>
+      </div>
+      <div>
+        <h3>Top Commands</h3>
+        <div id="top-commands" style="background:var(--bg2);border-radius:8px;padding:14px;height:300px;overflow-y:auto;"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Guilds -->

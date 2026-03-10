@@ -1,4 +1,9 @@
+'use strict';
+
 const { commands, handleButton } = require('../commands');
+const { logCommand, logAction, stats } = require('../webui/logger');
+
+const MOD_COMMANDS = new Set(['warn', 'timeout', 'ban', 'kick', 'clear']);
 
 module.exports = {
   name: 'interactionCreate',
@@ -7,6 +12,15 @@ module.exports = {
       if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
         if (!command?.interactionExecute) return;
+        logCommand(
+          interaction.commandName,
+          interaction.user.tag,
+          interaction.guild?.name ?? 'DM',
+        );
+        if (MOD_COMMANDS.has(interaction.commandName)) {
+          stats.modActions++;
+          logAction('moderation', `${interaction.user.tag} used /${interaction.commandName} in ${interaction.guild?.name ?? 'DM'}`);
+        }
         await command.interactionExecute(interaction);
       } else if (interaction.isButton()) {
         await handleButton(interaction);
