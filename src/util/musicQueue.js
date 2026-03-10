@@ -91,17 +91,40 @@ class MusicQueue {
 
     this.current = this.tracks.shift();
 
-    // Try streaming — if the first URL fails, search for an alternative
+    // If the stored URL is missing or invalid, search for it by title
+    const isValidUrl = (u) => typeof u === 'string' && u.startsWith('http');
+    if (!isValidUrl(this.current.url)) {
+      console.warn(`[Music] Invalid URL for "${this.current.title}" (${this.current.url}) — searching by title`);
+      try {
+        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 1 });
+        if (results.length) {
+          this.current = { ...this.current, url: results[0].url, duration: results[0].durationRaw ?? '?' };
+        } else {
+          this.textChannel.send(`❌ Could not find a playable URL for **${this.current.title}** — skipping.`).catch(() => {});
+          this.current = null;
+          this._playNext();
+          return;
+        }
+      } catch (err) {
+        console.error(`[Music] Title search failed: ${err.message}`);
+        this.textChannel.send(`❌ Could not find **${this.current.title}** — skipping.`).catch(() => {});
+        this.current = null;
+        this._playNext();
+        return;
+      }
+    }
+
+    // Try streaming — if the URL fails, search for an alternative
     let stream;
     try {
       stream = await play.stream(this.current.url);
     } catch (err) {
-      console.error(`[Music] Stream failed for "${this.current.title}": ${err.message}`);
+      console.error(`[Music] Stream failed for "${this.current.title}" (${this.current.url}): ${err.message}`);
 
-      // Fallback: search YouTube by title and try the next best result
+      // Fallback: search YouTube by title and try other results
       try {
-        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 3 });
-        const fallback = results.find(v => v.url !== this.current.url);
+        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 5 });
+        const fallback = results.find(v => isValidUrl(v.url) && v.url !== this.current.url);
         if (fallback) {
           console.warn(`[Music] Falling back to: ${fallback.title} (${fallback.url})`);
           this.current = { ...this.current, url: fallback.url, duration: fallback.durationRaw ?? '?' };
@@ -112,7 +135,7 @@ class MusicQueue {
       }
 
       if (!stream) {
-        this.textChannel.send(`❌ Could not stream **${this.current.title}** — skipping.\n> Error: \`${err.message}\``).catch(() => {});
+        this.textChannel.send(`❌ Could not stream **${this.current.title}** — skipping.\n> \`${err.message}\``).catch(() => {});
         this.current = null;
         this._playNext();
         return;
