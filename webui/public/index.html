@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GeorgeBot Dashboard</title>
+  <link rel="icon" href="/icon.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div class="bot-profile">
+    <img id="bot-avatar" src="/icon.png" alt="GeorgeBot">
+    <div class="name" id="bot-tag">GeorgeBot</div>
+    <div class="status">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </div>
+
+  <nav>
+    <a class="nav-link active" data-section="dashboard">
+      <span class="icon">📊</span> Dashboard
+    </a>
+    <a class="nav-link" data-section="guilds">
+      <span class="icon">🏠</span> Guilds
+    </a>
+    <a class="nav-link" data-section="logs">
+      <span class="icon">📋</span> Logs
+    </a>
+    <a class="nav-link" data-section="restart">
+      <span class="icon">🔄</span> Restart
+    </a>
+  </nav>
+
+  <button class="logout-btn" id="logout-btn">
+    <span class="icon">🚪</span> Logout
+  </button>
+</aside>
+
+<!-- Main content -->
+<main id="main">
+
+  <!-- Dashboard -->
+  <div class="section active" id="section-dashboard">
+    <h2>Dashboard</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="label">Status</div>
+        <div class="value" id="card-status">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Guilds</div>
+        <div class="value" id="card-guilds">—</div>
+      </div>
+      <div class="card">
+        <div class="label">Uptime</div>
+        <div class="value" id="card-uptime">—</div>
+        <div class="sub" id="card-uptime-sub"></div>
+      </div>
+      <div class="card">
+        <div class="label">Memory</div>
+        <div class="value" id="card-memory">—</div>
+        <div class="sub" id="card-memory-sub"></div>
+      </div>
+    </div>
+
+    <h3>Recent Logs</h3>
+    <div id="log-output" style="height: 320px;"></div>
+  </div>
+
+  <!-- Guilds -->
+  <div class="section" id="section-guilds">
+    <h2>Guilds</h2>
+    <div class="guild-list" id="guild-list"></div>
+
+    <div id="config-panel">
+      <h2 id="config-title">Guild Config</h2>
+      <div class="config-tabs">
+        <button class="tab-btn active" data-tab="welcome">Welcome</button>
+        <button class="tab-btn" data-tab="goodbye">Goodbye</button>
+        <button class="tab-btn" data-tab="autorole">Auto-role</button>
+        <button class="tab-btn" data-tab="warnings">Warnings</button>
+      </div>
+
+      <!-- Welcome tab -->
+      <div class="tab-pane active" id="tab-welcome">
+        <div class="field">
+          <label>Channel ID</label>
+          <input type="text" id="wc-channel" placeholder="e.g. 1234567890">
+        </div>
+        <div class="field">
+          <label>Message <span style="color:#555;font-style:italic">({user} {username} {server} {membercount})</span></label>
+          <textarea id="wc-message" placeholder="Leave blank for default"></textarea>
+        </div>
+        <div class="field toggle-row">
+          <label>Send DM to new members</label>
+          <input type="checkbox" id="wc-dm">
+        </div>
+        <div class="field" id="wc-dm-field">
+          <label>DM Message</label>
+          <textarea id="wc-dmmsg" placeholder="Leave blank for default"></textarea>
+        </div>
+        <button class="save-btn" id="save-welcome">Save</button>
+      </div>
+
+      <!-- Goodbye tab -->
+      <div class="tab-pane" id="tab-goodbye">
+        <div class="field">
+          <label>Channel ID</label>
+          <input type="text" id="gb-channel" placeholder="e.g. 1234567890">
+        </div>
+        <div class="field">
+          <label>Message</label>
+          <textarea id="gb-message" placeholder="Leave blank for default"></textarea>
+        </div>
+        <button class="save-btn" id="save-goodbye">Save</button>
+      </div>
+
+      <!-- Auto-role tab -->
+      <div class="tab-pane" id="tab-autorole">
+        <div class="field">
+          <label>Role ID</label>
+          <input type="text" id="ar-role" placeholder="e.g. 1234567890">
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+          This role is automatically assigned to every new member that joins.
+        </p>
+        <button class="save-btn" id="save-autorole">Save</button>
+      </div>
+
+      <!-- Warnings tab -->
+      <div class="tab-pane" id="tab-warnings">
+        <div id="warnings-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="section" id="section-logs">
+    <h2>Live Logs</h2>
+    <div id="log-output-full" class="log-output" style="height:calc(100vh - 160px);background:#111;border-radius:8px;padding:16px;font-family:Menlo,Consolas,monospace;font-size:12px;line-height:1.6;overflow-y:auto;color:#aaa;"></div>
+  </div>
+
+  <!-- Restart -->
+  <div class="section" id="section-restart">
+    <h2>Restart Bot</h2>
+    <div class="danger-zone">
+      <p>
+        This will call <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">process.exit(0)</code>
+        on the bot process. Docker's <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">restart: unless-stopped</code>
+        policy will automatically bring it back online within seconds.
+      </p>
+      <button class="restart-btn" id="restart-btn">Restart GeorgeBot</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

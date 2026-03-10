@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 
+const { startWebUI }    = require('./webui/server');
 const ready             = require('./listeners/ready');
 const voiceStateUpdate  = require('./listeners/voiceStateUpdate');
 const interactionCreate = require('./listeners/interactionCreate');
@@ -30,3 +31,4 @@ if (!token) {
 }
 
 client.login(token);
+startWebUI(client);

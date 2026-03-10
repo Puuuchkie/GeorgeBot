@@ -19,8 +19,11 @@ RUN npm ci --omit=dev
 
 # Copy source
 COPY src/ ./src/
+COPY webui/ ./webui/
 
 # Persistent data volume
 VOLUME ["/app/data"]
+
+EXPOSE 3000
 
 CMD ["node", "src/index.js"]

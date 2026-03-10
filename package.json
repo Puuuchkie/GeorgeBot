@@ -10,9 +10,13 @@
   },
   "dependencies": {
     "canvas": "^3.2.1",
+    "cookie-parser": "^1.4.7",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
-    "node-fetch": "^2.7.0"
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
