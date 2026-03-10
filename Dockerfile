@@ -10,7 +10,12 @@ RUN apk add --no-cache \
     g++ \
     make \
     python3 \
-    ffmpeg
+    ffmpeg \
+    curl
+
+# Install yt-dlp binary (most reliable YouTube streaming, continuously updated)
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp
 
 WORKDIR /app
 

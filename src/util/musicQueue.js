@@ -15,24 +15,13 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const ytdl       = require('@distube/ytdl-core');
+const { spawn }  = require('child_process');
 const play       = require('play-dl');
 const { logAction } = require('../webui/logger');
 
-// ── Cookie agent ──────────────────────────────────────────────────────────────
-let _ytdlAgent;
-if (process.env.YOUTUBE_COOKIE) {
-  try {
-    const cookies = process.env.YOUTUBE_COOKIE.split(';').map(c => {
-      const [name, ...rest] = c.trim().split('=');
-      return { name: name.trim(), value: rest.join('=').trim() };
-    });
-    _ytdlAgent = ytdl.createAgent(cookies);
-    console.log('[Music] YouTube cookie agent created.');
-  } catch (e) {
-    console.warn('[Music] Failed to create cookie agent:', e.message);
-  }
-}
+// ── yt-dlp cookie file (optional) ────────────────────────────────────────────
+// Set YOUTUBE_COOKIE_FILE=/path/to/cookies.txt (Netscape format) in your env
+// to bypass YouTube bot detection for age-restricted or region-locked videos.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseDuration(str) {
@@ -154,27 +143,24 @@ class MusicQueue {
     }
   }
 
-  // ── Streaming ───────────────────────────────────────────────────────────────
-  async _stream(url) {
-    const agentOpts = _ytdlAgent ? { agent: _ytdlAgent } : {};
-
-    // Fetch formats and prefer webm/opus (no transcoding needed by Discord)
-    const info    = await ytdl.getInfo(url, agentOpts);
-    const formats = ytdl.filterFormats(info.formats, 'audioonly');
-    const opus    = formats.find(f => f.codecs === 'opus' && f.container === 'webm');
-
-    if (opus) {
-      const stream = ytdl.downloadFromInfo(info, { format: opus, highWaterMark: 1 << 25 });
-      return createAudioResource(stream, { inputType: StreamType.WebmOpus, inlineVolume: true });
+  // ── Streaming via yt-dlp ─────────────────────────────────────────────────────
+  _stream(url) {
+    const args = [
+      '--format', 'bestaudio[ext=webm][acodec=opus]/bestaudio/best',
+      '--no-playlist',
+      '--quiet',
+      '-o', '-', // pipe audio to stdout
+    ];
+    if (process.env.YOUTUBE_COOKIE_FILE) {
+      args.push('--cookies', process.env.YOUTUBE_COOKIE_FILE);
     }
+    args.push(url);
 
-    // Fallback: best audio, let ffmpeg transcode
-    const stream = ytdl.downloadFromInfo(info, {
-      filter:         'audioonly',
-      quality:        'highestaudio',
-      highWaterMark:  1 << 25,
-    });
-    return createAudioResource(stream, { inputType: StreamType.Arbitrary, inlineVolume: true });
+    const proc = spawn('yt-dlp', args);
+    proc.stderr.on('data', d => console.error('[yt-dlp]', d.toString().trim()));
+    proc.on('error', err => console.error('[yt-dlp] spawn error:', err.message));
+
+    return createAudioResource(proc.stdout, { inputType: StreamType.Arbitrary, inlineVolume: true });
   }
 
   // ── Resolve URL when missing ─────────────────────────────────────────────────
@@ -251,7 +237,7 @@ class MusicQueue {
       const url    = await this._resolveUrl(this.current);
       this.current = { ...this.current, url };
 
-      const resource = await this._stream(url);
+      const resource = this._stream(url);
       this.player.play(resource);
 
       this.startedAt = Date.now();
