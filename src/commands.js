@@ -1166,7 +1166,8 @@ const COMMAND_LIST = [
 
         // ── Spotify ───────────────────────────────────────────────────────────
         await ensureSpotify(playdl);
-        const spType = await playdl.sp_validate(query).catch(() => false);
+        let spType = false;
+        try { spType = playdl.sp_validate(query); } catch { spType = false; }
         if (spType && spType !== 'search') {
           if (!process.env.SPOTIFY_CLIENT_ID) return interaction.editReply({ content: '❌ Spotify is not configured. Set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in your environment.' });
 
