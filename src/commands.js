@@ -1073,10 +1073,10 @@ const COMMAND_LIST = [
   // ── Music ────────────────────────────────────────────────────────────────────
 
   {
-    name: 'play', description: 'Play a song or add it to the queue', category: 'Music', permLevel: 0,
+    name: 'play', description: 'Play a song, YouTube URL, or playlist', category: 'Music', permLevel: 0,
     slashData: new SlashCommandBuilder()
-      .setName('play').setDescription('Play a song or add it to the queue')
-      .addStringOption(o => o.setName('query').setDescription('Song name or YouTube URL').setRequired(true)),
+      .setName('play').setDescription('Play a song, YouTube URL, or playlist')
+      .addStringOption(o => o.setName('query').setDescription('Song name, YouTube URL, or playlist URL').setRequired(true)),
     async interactionExecute(interaction) {
       const query  = interaction.options.getString('query');
       const member = interaction.member;
@@ -1097,9 +1097,46 @@ const COMMAND_LIST = [
       }
 
       try {
-        const results = await require('play-dl').search(query, { source: { youtube: 'video' }, limit: 1 });
-        if (!results.length) return interaction.editReply({ content: '❌ No results found.' });
-        const video = results[0];
+        const playdl = require('play-dl');
+
+        // Detect if query is a YouTube playlist URL
+        const urlType = playdl.yt_validate(query);
+        if (urlType === 'playlist') {
+          const playlist = await playdl.playlist_info(query, { incomplete: true });
+          const videos   = await playlist.all_videos();
+          if (!videos.length) return interaction.editReply({ content: '❌ Playlist is empty or private.' });
+
+          for (const video of videos) {
+            await queue.addTrack({
+              title:       video.title,
+              url:         video.url,
+              duration:    video.durationRaw ?? 'Live',
+              requestedBy: member.displayName,
+            });
+          }
+
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0x5865f2)
+              .setTitle('📋 Playlist Queued')
+              .setDescription(`**[${playlist.title}](${query})**`)
+              .addFields(
+                { name: 'Tracks added', value: `${videos.length}`, inline: true },
+                { name: 'Requested by', value: member.displayName, inline: true },
+              )],
+          });
+        }
+
+        // Single video URL or search query
+        let video;
+        if (urlType === 'video') {
+          const info = await playdl.video_info(query);
+          video = info.video_details;
+        } else {
+          const results = await playdl.search(query, { source: { youtube: 'video' }, limit: 1 });
+          if (!results.length) return interaction.editReply({ content: '❌ No results found.' });
+          video = results[0];
+        }
+
         const track = {
           title:       video.title,
           url:         video.url,
