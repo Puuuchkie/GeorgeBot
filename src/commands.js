@@ -15,6 +15,46 @@ const { getConfig, updateConfig } = require('./util/guildConfig');
 const { generateCard } = require('./util/welcomeCard');
 const { MusicQueue, getQueue, setQueue } = require('./util/musicQueue');
 
+// ─── Music service helpers ────────────────────────────────────────────────────
+
+let _spotifyReady = false;
+
+async function ensureSpotify(playdl) {
+  if (_spotifyReady || !process.env.SPOTIFY_CLIENT_ID) return;
+  await playdl.setToken({
+    spotify: {
+      client_id:     process.env.SPOTIFY_CLIENT_ID,
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET || '',
+      refresh_token: '',
+      access_token:  '',
+    },
+  });
+  _spotifyReady = true;
+}
+
+async function resolveAppleMusic(url) {
+  const trackMatch = url.match(/[?&]i=(\d+)/);
+  const idMatch    = url.match(/\/(\d+)(?:[?#]|$)/);
+  const isAlbum    = url.includes('/album/') && !trackMatch;
+
+  if (trackMatch) {
+    const res  = await fetch(`https://itunes.apple.com/lookup?id=${trackMatch[1]}`);
+    const data = await res.json();
+    const item = data.results?.[0];
+    if (!item) return null;
+    return [{ search: `${item.trackName} ${item.artistName}`, title: `${item.trackName} — ${item.artistName}` }];
+  }
+
+  if (isAlbum && idMatch) {
+    const res    = await fetch(`https://itunes.apple.com/lookup?id=${idMatch[1]}&entity=song`);
+    const data   = await res.json();
+    const tracks = data.results?.filter(r => r.wrapperType === 'track') ?? [];
+    return tracks.map(t => ({ search: `${t.trackName} ${t.artistName}`, title: `${t.trackName} — ${t.artistName}` }));
+  }
+
+  return null;
+}
+
 // ─── Vote persistence ────────────────────────────────────────────────────────
 
 const VOTE_DIR = path.join(process.cwd(), 'data', 'votes');
@@ -1073,10 +1113,10 @@ const COMMAND_LIST = [
   // ── Music ────────────────────────────────────────────────────────────────────
 
   {
-    name: 'play', description: 'Play a song, YouTube URL, or playlist', category: 'Music', permLevel: 0,
+    name: 'play', description: 'Play a song, YouTube/Spotify/Apple Music URL or playlist', category: 'Music', permLevel: 0,
     slashData: new SlashCommandBuilder()
-      .setName('play').setDescription('Play a song, YouTube URL, or playlist')
-      .addStringOption(o => o.setName('query').setDescription('Song name, YouTube URL, or playlist URL').setRequired(true)),
+      .setName('play').setDescription('Play a song, YouTube/Spotify/Apple Music URL or playlist')
+      .addStringOption(o => o.setName('query').setDescription('Song name, YouTube, Spotify, or Apple Music URL').setRequired(true)),
     async interactionExecute(interaction) {
       const query  = interaction.options.getString('query');
       const member = interaction.member;
@@ -1099,7 +1139,64 @@ const COMMAND_LIST = [
       try {
         const playdl = require('play-dl');
 
-        // Detect if query is a YouTube playlist URL
+        // ── Apple Music ───────────────────────────────────────────────────────
+        if (query.includes('music.apple.com')) {
+          const items = await resolveAppleMusic(query);
+          if (!items) return interaction.editReply({ content: '❌ Apple Music playlists are not supported — try a track or album link.' });
+          if (!items.length) return interaction.editReply({ content: '❌ Could not find that Apple Music item.' });
+
+          let queued = 0;
+          for (const item of items) {
+            const results = await playdl.search(item.search, { source: { youtube: 'video' }, limit: 1 });
+            if (!results.length) continue;
+            const v = results[0];
+            await queue.addTrack({ title: item.title, url: v.url, duration: v.durationRaw ?? '?', requestedBy: member.displayName });
+            queued++;
+          }
+
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0xfc3c44)
+              .setTitle(items.length > 1 ? '🍎 Apple Music Album Queued' : '🍎 Apple Music Track Queued')
+              .setDescription(items.length > 1
+                ? `Queued **${queued}** tracks from Apple Music.`
+                : `Queued **${items[0].title}** via Apple Music.`)
+              .addFields({ name: 'Requested by', value: member.displayName, inline: true })],
+          });
+        }
+
+        // ── Spotify ───────────────────────────────────────────────────────────
+        await ensureSpotify(playdl);
+        const spType = await playdl.sp_validate(query).catch(() => false);
+        if (spType && spType !== 'search') {
+          if (!process.env.SPOTIFY_CLIENT_ID) return interaction.editReply({ content: '❌ Spotify is not configured. Set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in your environment.' });
+
+          const spData = await playdl.spotify(query);
+          const spTracks = spType === 'track'
+            ? [spData]
+            : await spData.all_tracks();
+
+          let queued = 0;
+          for (const t of spTracks) {
+            const searchQ  = `${t.name} ${t.artists?.map(a => a.name).join(' ') ?? ''}`;
+            const results  = await playdl.search(searchQ, { source: { youtube: 'video' }, limit: 1 });
+            if (!results.length) continue;
+            const v = results[0];
+            await queue.addTrack({ title: `${t.name} — ${t.artists?.[0]?.name ?? ''}`, url: v.url, duration: v.durationRaw ?? '?', requestedBy: member.displayName });
+            queued++;
+          }
+
+          const label = spType === 'track' ? '🟢 Spotify Track Queued' : `🟢 Spotify ${spType === 'album' ? 'Album' : 'Playlist'} Queued`;
+          return interaction.editReply({
+            embeds: [new EmbedBuilder().setColor(0x1db954)
+              .setTitle(label)
+              .setDescription(spType === 'track'
+                ? `Queued **${spTracks[0].name}**.`
+                : `Queued **${queued}** tracks from **${spData.name}**.`)
+              .addFields({ name: 'Requested by', value: member.displayName, inline: true })],
+          });
+        }
+
+        // ── YouTube playlist ──────────────────────────────────────────────────
         const urlType = playdl.yt_validate(query);
         if (urlType === 'playlist') {
           const playlist = await playdl.playlist_info(query, { incomplete: true });
@@ -1107,17 +1204,12 @@ const COMMAND_LIST = [
           if (!videos.length) return interaction.editReply({ content: '❌ Playlist is empty or private.' });
 
           for (const video of videos) {
-            await queue.addTrack({
-              title:       video.title,
-              url:         video.url,
-              duration:    video.durationRaw ?? 'Live',
-              requestedBy: member.displayName,
-            });
+            await queue.addTrack({ title: video.title, url: video.url, duration: video.durationRaw ?? 'Live', requestedBy: member.displayName });
           }
 
           return interaction.editReply({
             embeds: [new EmbedBuilder().setColor(0x5865f2)
-              .setTitle('📋 Playlist Queued')
+              .setTitle('📋 YouTube Playlist Queued')
               .setDescription(`**[${playlist.title}](${query})**`)
               .addFields(
                 { name: 'Tracks added', value: `${videos.length}`, inline: true },
@@ -1126,7 +1218,7 @@ const COMMAND_LIST = [
           });
         }
 
-        // Single video URL or search query
+        // ── Single YouTube video or search ────────────────────────────────────
         let video;
         if (urlType === 'video') {
           const info = await playdl.video_info(query);
@@ -1137,12 +1229,7 @@ const COMMAND_LIST = [
           video = results[0];
         }
 
-        const track = {
-          title:       video.title,
-          url:         video.url,
-          duration:    video.durationRaw ?? 'Live',
-          requestedBy: member.displayName,
-        };
+        const track = { title: video.title, url: video.url, duration: video.durationRaw ?? 'Live', requestedBy: member.displayName };
         await queue.addTrack(track);
         const isFirst = queue.current?.url === track.url && !queue.tracks.length;
         if (!isFirst) {
