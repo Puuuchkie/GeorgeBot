@@ -11,6 +11,8 @@ const path = require('path');
 const { VERSION } = require('./util/constants');
 const { ANSWERS, JOKES, FOOD } = require('./util/quotes');
 const { checkPerms, getPermLevel } = require('./core/permsCore');
+const { getConfig, updateConfig } = require('./util/guildConfig');
+const { generateCard } = require('./util/welcomeCard');
 
 // ─── Vote persistence ────────────────────────────────────────────────────────
 
@@ -287,7 +289,7 @@ function buildCommandsEmbed(userLevel) {
     if (!grouped[cmd.category]) grouped[cmd.category] = [];
     grouped[cmd.category].push(`\`/${cmd.name}\` — ${cmd.description}`);
   }
-  const CATEGORY_EMOJI = { Information: 'ℹ️', Fun: '🎉', Voting: '🗳️', VIP: '⭐', Moderation: '🔨' };
+  const CATEGORY_EMOJI = { Information: 'ℹ️', Fun: '🎉', Voting: '🗳️', VIP: '⭐', Moderation: '🔨', Setup: '⚙️' };
   const embed = new EmbedBuilder()
     .setTitle('📋 Available Commands')
     .setColor(0x5865f2)
@@ -869,6 +871,161 @@ const COMMAND_LIST = [
           .setFooter({ text: `${warns.length} warning(s) total` })],
         ephemeral: true,
       });
+    },
+  },
+
+  // ── Setup ─────────────────────────────────────────────────────────────────────
+
+  {
+    name: 'welcome',
+    category: 'Setup',
+    description: 'Configure welcome messages and cards',
+    permLevel: 2,
+    slashData: new SlashCommandBuilder()
+      .setName('welcome').setDescription('Configure welcome messages')
+      .addSubcommand((sub) =>
+        sub.setName('channel').setDescription('Set the welcome channel')
+          .addChannelOption((o) => o.setName('channel').setDescription('Channel to send welcome messages in').setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName('message').setDescription('Set the welcome message. Use {user}, {username}, {server}, {membercount}')
+          .addStringOption((o) => o.setName('text').setDescription('Message text').setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName('dm').setDescription('Toggle DM welcome message')
+          .addBooleanOption((o) => o.setName('enabled').setDescription('Enable or disable DM welcome').setRequired(true))
+      )
+      .addSubcommand((sub) => sub.setName('test').setDescription('Preview the welcome card'))
+      .addSubcommand((sub) => sub.setName('disable').setDescription('Disable welcome messages')),
+    async interactionExecute(interaction) {
+      if (!checkPerms(interaction.member, interaction.channel, 2))
+        return errReply(interaction, 'You do not have permission to use this command.');
+      const sub = interaction.options.getSubcommand();
+      const { guild } = interaction;
+
+      switch (sub) {
+        case 'channel': {
+          const channel = interaction.options.getChannel('channel');
+          updateConfig(guild.id, { welcome: { ...getConfig(guild.id).welcome, channelId: channel.id } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ Welcome channel set to ${channel}.`).setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+        case 'message': {
+          const text = interaction.options.getString('text');
+          updateConfig(guild.id, { welcome: { ...getConfig(guild.id).welcome, message: text } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ Welcome message set.\n\nPreview: ${text.replace(/{user}/g, interaction.member).replace(/{username}/g, interaction.user.username).replace(/{server}/g, guild.name).replace(/{membercount}/g, guild.memberCount)}`).setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+        case 'dm': {
+          const enabled = interaction.options.getBoolean('enabled');
+          updateConfig(guild.id, { welcome: { ...getConfig(guild.id).welcome, dm: enabled } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ DM welcome ${enabled ? 'enabled' : 'disabled'}.`).setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+        case 'test': {
+          await interaction.deferReply({ ephemeral: true });
+          try {
+            const { AttachmentBuilder } = require('discord.js');
+            const buf  = await generateCard(interaction.member, guild, 'welcome');
+            const file = new AttachmentBuilder(buf, { name: 'welcome.png' });
+            await interaction.editReply({ content: '👋 Welcome card preview:', files: [file] });
+          } catch (err) {
+            await interaction.editReply('Failed to generate card: ' + err.message);
+          }
+          break;
+        }
+        case 'disable': {
+          const config = getConfig(guild.id);
+          updateConfig(guild.id, { welcome: { ...config.welcome, channelId: null } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription('✅ Welcome messages disabled.').setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+      }
+    },
+  },
+
+  {
+    name: 'goodbye',
+    category: 'Setup',
+    description: 'Configure goodbye messages and cards',
+    permLevel: 2,
+    slashData: new SlashCommandBuilder()
+      .setName('goodbye').setDescription('Configure goodbye messages')
+      .addSubcommand((sub) =>
+        sub.setName('channel').setDescription('Set the goodbye channel')
+          .addChannelOption((o) => o.setName('channel').setDescription('Channel to send goodbye messages in').setRequired(true))
+      )
+      .addSubcommand((sub) =>
+        sub.setName('message').setDescription('Set the goodbye message. Use {user}, {username}, {server}, {membercount}')
+          .addStringOption((o) => o.setName('text').setDescription('Message text').setRequired(true))
+      )
+      .addSubcommand((sub) => sub.setName('test').setDescription('Preview the goodbye card'))
+      .addSubcommand((sub) => sub.setName('disable').setDescription('Disable goodbye messages')),
+    async interactionExecute(interaction) {
+      if (!checkPerms(interaction.member, interaction.channel, 2))
+        return errReply(interaction, 'You do not have permission to use this command.');
+      const sub = interaction.options.getSubcommand();
+      const { guild } = interaction;
+
+      switch (sub) {
+        case 'channel': {
+          const channel = interaction.options.getChannel('channel');
+          updateConfig(guild.id, { goodbye: { ...getConfig(guild.id).goodbye, channelId: channel.id } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ Goodbye channel set to ${channel}.`).setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+        case 'message': {
+          const text = interaction.options.getString('text');
+          updateConfig(guild.id, { goodbye: { ...getConfig(guild.id).goodbye, message: text } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ Goodbye message set.`).setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+        case 'test': {
+          await interaction.deferReply({ ephemeral: true });
+          try {
+            const { AttachmentBuilder } = require('discord.js');
+            const buf  = await generateCard(interaction.member, guild, 'goodbye');
+            const file = new AttachmentBuilder(buf, { name: 'goodbye.png' });
+            await interaction.editReply({ content: '👋 Goodbye card preview:', files: [file] });
+          } catch (err) {
+            await interaction.editReply('Failed to generate card: ' + err.message);
+          }
+          break;
+        }
+        case 'disable': {
+          const config = getConfig(guild.id);
+          updateConfig(guild.id, { goodbye: { ...config.goodbye, channelId: null } });
+          await interaction.reply({ embeds: [new EmbedBuilder().setDescription('✅ Goodbye messages disabled.').setColor(0x00c853)], ephemeral: true });
+          break;
+        }
+      }
+    },
+  },
+
+  {
+    name: 'autorole',
+    category: 'Setup',
+    description: 'Assign a role automatically when someone joins',
+    permLevel: 2,
+    slashData: new SlashCommandBuilder()
+      .setName('autorole').setDescription('Auto-assign a role on join')
+      .addSubcommand((sub) =>
+        sub.setName('set').setDescription('Set the auto-role')
+          .addRoleOption((o) => o.setName('role').setDescription('Role to assign').setRequired(true))
+      )
+      .addSubcommand((sub) => sub.setName('remove').setDescription('Remove the auto-role')),
+    async interactionExecute(interaction) {
+      if (!checkPerms(interaction.member, interaction.channel, 2))
+        return errReply(interaction, 'You do not have permission to use this command.');
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'set') {
+        const role = interaction.options.getRole('role');
+        updateConfig(interaction.guild.id, { autorole: role.id });
+        await interaction.reply({ embeds: [new EmbedBuilder().setDescription(`✅ Auto-role set to **${role.name}**. New members will receive it on join.`).setColor(0x00c853)], ephemeral: true });
+      } else {
+        updateConfig(interaction.guild.id, { autorole: null });
+        await interaction.reply({ embeds: [new EmbedBuilder().setDescription('✅ Auto-role removed.').setColor(0x00c853)], ephemeral: true });
+      }
     },
   },
 

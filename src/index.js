@@ -4,6 +4,8 @@ const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const ready             = require('./listeners/ready');
 const voiceStateUpdate  = require('./listeners/voiceStateUpdate');
 const interactionCreate = require('./listeners/interactionCreate');
+const guildMemberAdd    = require('./listeners/guildMemberAdd');
+const guildMemberRemove = require('./listeners/guildMemberRemove');
 
 const client = new Client({
   intents: [
@@ -17,7 +19,7 @@ const client = new Client({
 // Register listeners
 client.once(ready.name, (c) => ready.execute(c).catch(console.error));
 
-for (const listener of [voiceStateUpdate, interactionCreate]) {
+for (const listener of [voiceStateUpdate, interactionCreate, guildMemberAdd, guildMemberRemove]) {
   client.on(listener.name, (...args) => listener.execute(...args).catch(console.error));
 }
 

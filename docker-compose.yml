@@ -1,0 +1,8 @@
+services:
+  georgebot:
+    image: ghcr.io/puuuchkie/georgebot:latest
+    container_name: georgebot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
