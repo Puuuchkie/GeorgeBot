@@ -1162,6 +1162,7 @@ const COMMAND_LIST = [
                 : `Queued **${items[0].title}** via Apple Music.`)
               .addFields({ name: 'Requested by', value: member.displayName, inline: true })],
           });
+          return; // Apple Music handled — stop here
         }
 
         // ── Spotify ───────────────────────────────────────────────────────────
@@ -1220,10 +1221,13 @@ const COMMAND_LIST = [
         }
 
         // ── Single YouTube video or search ────────────────────────────────────
+        const ytdl = require('@distube/ytdl-core');
         let video;
         if (urlType === 'video') {
-          const info = await playdl.video_info(query);
-          video = info.video_details;
+          // Use ytdl for info — same lib that handles streaming, more reliable than play-dl
+          const info = await ytdl.getBasicInfo(query);
+          const d    = info.videoDetails;
+          video      = { title: d.title, url: d.video_url, durationRaw: new Date(d.lengthSeconds * 1000).toISOString().slice(11, 19).replace(/^00:/, '') };
         } else {
           const results = await playdl.search(query, { source: { youtube: 'video' }, limit: 1 });
           if (!results.length) return interaction.editReply({ content: '❌ No results found.' });

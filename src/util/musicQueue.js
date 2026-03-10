@@ -6,15 +6,37 @@ const {
   joinVoiceChannel,
   AudioPlayerStatus,
   VoiceConnectionStatus,
+  StreamType,
   entersState,
 } = require('@discordjs/voice');
-const play = require('play-dl');
+const ytdl  = require('@distube/ytdl-core');
+const play  = require('play-dl');
 const { EmbedBuilder } = require('discord.js');
 const { logAction }    = require('../webui/logger');
 
-// ── YouTube cookie support (set YOUTUBE_COOKIE env var to bypass bot detection)
+// ── Cookie agent for @distube/ytdl-core ──────────────────────────────────────
+let _ytdlAgent;
 if (process.env.YOUTUBE_COOKIE) {
-  play.setToken({ youtube: { cookie: process.env.YOUTUBE_COOKIE } });
+  try {
+    // parse "name=value; name2=value2" cookie string into array of objects
+    const cookies = process.env.YOUTUBE_COOKIE.split(';').map(c => {
+      const [name, ...rest] = c.trim().split('=');
+      return { name: name.trim(), value: rest.join('=').trim() };
+    });
+    _ytdlAgent = ytdl.createAgent(cookies);
+    console.log('[Music] YouTube cookie agent created.');
+  } catch (e) {
+    console.warn('[Music] Failed to create cookie agent:', e.message);
+  }
+}
+
+function ytdlOptions() {
+  return {
+    filter:          'audioonly',
+    quality:         'highestaudio',
+    highWaterMark:   1 << 25, // 32 MB
+    ...(  _ytdlAgent ? { agent: _ytdlAgent } : {}),
+  };
 }
 
 const queues = new Map(); // guildId -> MusicQueue
@@ -80,73 +102,42 @@ class MusicQueue {
     }
   }
 
+  // Resolve a track's URL — if it's a search query (no http), search YouTube
+  async _resolveUrl(track) {
+    if (typeof track.url === 'string' && track.url.startsWith('http')) return track.url;
+    // URL is missing or invalid — search by title
+    console.warn(`[Music] No URL for "${track.title}" — searching YouTube by title`);
+    const results = await play.search(track.title, { source: { youtube: 'video' }, limit: 1 });
+    if (!results.length) throw new Error(`No YouTube results for "${track.title}"`);
+    return results[0].url;
+  }
+
+  async _stream(url) {
+    const stream = ytdl(url, ytdlOptions());
+    return createAudioResource(stream, { inputType: StreamType.Arbitrary });
+  }
+
   async _playNext() {
     clearTimeout(this.leaveTimer);
 
     if (!this.tracks.length) {
-      this.current = null;
+      this.current  = null;
       this.leaveTimer = setTimeout(() => this.destroy(), 60_000);
       return;
     }
 
     this.current = this.tracks.shift();
 
-    // If the stored URL is missing or invalid, search for it by title
-    const isValidUrl = (u) => typeof u === 'string' && u.startsWith('http');
-    if (!isValidUrl(this.current.url)) {
-      console.warn(`[Music] Invalid URL for "${this.current.title}" (${this.current.url}) — searching by title`);
-      try {
-        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 1 });
-        if (results.length) {
-          this.current = { ...this.current, url: results[0].url, duration: results[0].durationRaw ?? '?' };
-        } else {
-          this.textChannel.send(`❌ Could not find a playable URL for **${this.current.title}** — skipping.`).catch(() => {});
-          this.current = null;
-          this._playNext();
-          return;
-        }
-      } catch (err) {
-        console.error(`[Music] Title search failed: ${err.message}`);
-        this.textChannel.send(`❌ Could not find **${this.current.title}** — skipping.`).catch(() => {});
-        this.current = null;
-        this._playNext();
-        return;
-      }
-    }
-
-    // Try streaming — if the URL fails, search for an alternative
-    let stream;
     try {
-      stream = await play.stream(this.current.url);
-    } catch (err) {
-      console.error(`[Music] Stream failed for "${this.current.title}" (${this.current.url}): ${err.message}`);
+      // Resolve URL if needed
+      const url      = await this._resolveUrl(this.current);
+      this.current   = { ...this.current, url };
 
-      // Fallback: search YouTube by title and try other results
-      try {
-        const results = await play.search(this.current.title, { source: { youtube: 'video' }, limit: 5 });
-        const fallback = results.find(v => isValidUrl(v.url) && v.url !== this.current.url);
-        if (fallback) {
-          console.warn(`[Music] Falling back to: ${fallback.title} (${fallback.url})`);
-          this.current = { ...this.current, url: fallback.url, duration: fallback.durationRaw ?? '?' };
-          stream = await play.stream(fallback.url);
-        }
-      } catch (fbErr) {
-        console.error(`[Music] Fallback also failed: ${fbErr.message}`);
-      }
-
-      if (!stream) {
-        this.textChannel.send(`❌ Could not stream **${this.current.title}** — skipping.\n> \`${err.message}\``).catch(() => {});
-        this.current = null;
-        this._playNext();
-        return;
-      }
-    }
-
-    try {
-      const resource = createAudioResource(stream.stream, { inputType: stream.type });
+      const resource = await this._stream(url);
       this.player.play(resource);
 
       logAction('music', `Now playing: ${this.current.title} [${this.current.duration}] — requested by ${this.current.requestedBy}`);
+
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('🎵 Now Playing')
@@ -157,8 +148,8 @@ class MusicQueue {
         );
       this.textChannel.send({ embeds: [embed] }).catch(() => {});
     } catch (err) {
-      console.error(`[Music] Playback error: ${err.message}`);
-      this.textChannel.send(`❌ Playback error for **${this.current.title}** — skipping.`).catch(() => {});
+      console.error(`[Music] Failed to play "${this.current?.title}": ${err.message}`);
+      this.textChannel.send(`❌ Failed to play **${this.current?.title ?? 'track'}** — skipping.\n> \`${err.message}\``).catch(() => {});
       this.current = null;
       this._playNext();
     }
