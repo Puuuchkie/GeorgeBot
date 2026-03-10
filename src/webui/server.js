@@ -45,7 +45,7 @@ function startWebUI(client) {
   // Static SPA
   const PUBLIC = path.join(__dirname, '../../webui/public');
   app.use(express.static(PUBLIC));
-  app.get('*', (req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
+  app.get('/{*path}', (req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 
   const server = http.createServer(app);
 
